@@ -37,6 +37,8 @@ Poisson<dim>::Poisson()
   add_parameter("Grid generator arguments", grid_generator_arguments);
   add_parameter("Number of refinement cycles", n_cycles);
   add_parameter("Exact solution expression", exact_solution_expression);
+  add_parameter("Stiffness coefficient expression",
+                stiffness_coefficient_expression);
 
   this->prm.enter_subsection("Error table");
   error_table.add_parameters(this->prm);
@@ -94,6 +96,12 @@ Poisson<dim>::setup_system()
                                            "x,y,z",
                                 exact_solution_expression,
                                 function_constants);
+
+      stiffness_coefficient.initialize(dim == 1 ? "x" :
+                                       dim == 2 ? "x,y" :
+                                                  "x,y,z",
+                                       stiffness_coefficient_expression,
+                                       function_constants);
     }
 
 
@@ -132,7 +140,9 @@ Poisson<dim>::assemble_system()
           for (const unsigned int i : fe_values.dof_indices())
             for (const unsigned int j : fe_values.dof_indices())
               cell_matrix(i, j) +=
-                (fe_values.shape_grad(i, q_index) * // grad phi_i(x_q)
+                (stiffness_coefficient.value(
+                   fe_values.quadrature_point(q_index)) *
+                 fe_values.shape_grad(i, q_index) * // grad phi_i(x_q)
                  fe_values.shape_grad(j, q_index) * // grad phi_j(x_q)
                  fe_values.JxW(q_index));           // dx
           for (const unsigned int i : fe_values.dof_indices())

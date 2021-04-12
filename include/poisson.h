@@ -97,15 +97,17 @@ protected:
   FunctionParser<dim> forcing_term;
   FunctionParser<dim> boundary_condition;
   FunctionParser<dim> exact_solution;
+  FunctionParser<dim> stiffness_coefficient;
 
   unsigned int fe_degree     = 1;
   unsigned int n_refinements = 4;
   unsigned int n_cycles      = 4;
   std::string  output_name   = "poisson";
 
-  std::string                   forcing_term_expression       = "1";
-  std::string                   boundary_contition_expression = "0";
-  std::string                   exact_solution_expression     = "0";
+  std::string                   forcing_term_expression          = "1";
+  std::string                   boundary_contition_expression    = "0";
+  std::string                   exact_solution_expression        = "0";
+  std::string                   stiffness_coefficient_expression = "1";
   std::map<std::string, double> function_constants;
 
   std::string grid_generator_function  = "hyper_cube";
