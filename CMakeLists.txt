@@ -12,7 +12,7 @@ ADD_EXECUTABLE(step-4 source/step-4.cc)
 DEAL_II_SETUP_TARGET(step-4)
 
 # Executable for the exerciese
-ADD_EXECUTABLE(poisson source/poisson.cc)
+ADD_EXECUTABLE(poisson source/main.cc source/poisson.cc)
 DEAL_II_SETUP_TARGET(poisson)
 
 # Library of the executable

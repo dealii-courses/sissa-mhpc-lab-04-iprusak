@@ -17,19 +17,23 @@
  *          Guido Kanschat, 2011
  *          Luca Heltai, 2021
  */
+
 #include "poisson.h"
 
 using namespace dealii;
 
-Poisson::Poisson()
+template<int dim> 
+Poisson<dim>::Poisson()
   : fe(1)
   , dof_handler(triangulation)
 {}
 
 
 
+
+template<int dim> 
 void
-Poisson::make_grid()
+Poisson<dim>::make_grid()
 {
   GridGenerator::hyper_cube(triangulation, -1, 1);
   triangulation.refine_global(5);
@@ -39,8 +43,10 @@ Poisson::make_grid()
 
 
 
+
+template<int dim>
 void
-Poisson::setup_system()
+Poisson<dim>::setup_system()
 {
   dof_handler.distribute_dofs(fe);
   std::cout << "Number of degrees of freedom: " << dof_handler.n_dofs()
@@ -55,11 +61,13 @@ Poisson::setup_system()
 
 
 
+
+template<int dim>
 void
-Poisson::assemble_system()
+Poisson<dim>::assemble_system()
 {
-  QGauss<2>          quadrature_formula(fe.degree + 1);
-  FEValues<2>        fe_values(fe,
+  QGauss<dim>          quadrature_formula(fe.degree + 1);
+  FEValues<dim>        fe_values(fe,
                         quadrature_formula,
                         update_values | update_gradients | update_JxW_values);
   const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
@@ -96,7 +104,7 @@ Poisson::assemble_system()
   std::map<types::global_dof_index, double> boundary_values;
   VectorTools::interpolate_boundary_values(dof_handler,
                                            0,
-                                           Functions::ZeroFunction<2>(),
+                                           Functions::ZeroFunction<dim>(),
                                            boundary_values);
   MatrixTools::apply_boundary_values(boundary_values,
                                      system_matrix,
@@ -106,8 +114,10 @@ Poisson::assemble_system()
 
 
 
+
+template<int dim>
 void
-Poisson::solve()
+Poisson<dim>::solve()
 {
   SolverControl            solver_control(1000, 1e-12);
   SolverCG<Vector<double>> solver(solver_control);
@@ -116,10 +126,12 @@ Poisson::solve()
 
 
 
+
+template<int dim>
 void
-Poisson::output_results() const
+Poisson<dim>::output_results() const
 {
-  DataOut<2> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(solution, "solution");
   data_out.build_patches();
@@ -129,8 +141,10 @@ Poisson::output_results() const
 
 
 
+
+template<int dim>
 void
-Poisson::run()
+Poisson<dim>::run()
 {
   make_grid();
   setup_system();
@@ -138,3 +152,7 @@ Poisson::run()
   solve();
   output_results();
 }
+
+template class Poisson<1>;
+template class Poisson<2>;
+template class Poisson<3>;
