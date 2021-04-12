@@ -1,3 +1,4 @@
+
 /* ---------------------------------------------------------------------
  *
  * Copyright (C) 1999 - 2020 by the deal.II authors
@@ -17,32 +18,94 @@
  *          Guido Kanschat, 2011
  *          Luca Heltai, 2021
  */
+
 #include "poisson.h"
 
 using namespace dealii;
 
-Poisson::Poisson()
-  : fe(1)
-  , dof_handler(triangulation)
-{}
-
-
-
-void
-Poisson::make_grid()
+template <int dim>
+Poisson<dim>::Poisson()
+  : dof_handler(triangulation)
 {
-  GridGenerator::hyper_cube(triangulation, -1, 1);
-  triangulation.refine_global(5);
+  add_parameter("Number of global refinements", n_refinements);
+  add_parameter("Output filename", output_name);
+  add_parameter("Finite element degree", fe_degree);
+  add_parameter("Forcing term expression", forcing_term_expression);
+  add_parameter("Boundary condition expression", boundary_contition_expression);
+  add_parameter("Problem constants", function_constants);
+  add_parameter("Grid generator function", grid_generator_function);
+  add_parameter("Grid generator arguments", grid_generator_arguments);
+  add_parameter("Number of refinement cycles", n_cycles);
+  add_parameter("Exact solution expression", exact_solution_expression);
+  add_parameter("Stiffness coefficient expression",
+                stiffness_coefficient_expression);
+
+  this->prm.enter_subsection("Error table");
+  error_table.add_parameters(this->prm);
+  this->prm.leave_subsection();
+}
+
+
+template <int dim>
+void
+Poisson<dim>::initialize(const std::string &filename)
+{
+  ParameterAcceptor::initialize(filename);
+}
+
+template <int dim>
+void
+Poisson<dim>::make_grid()
+{
+  GridGenerator::generate_from_name_and_arguments(triangulation,
+                                                  grid_generator_function,
+                                                  grid_generator_arguments);
+  triangulation.refine_global(n_refinements);
   std::cout << "Number of active cells: " << triangulation.n_active_cells()
             << std::endl;
 }
 
-
-
+template <int dim>
 void
-Poisson::setup_system()
+Poisson<dim>::refine_grid()
 {
-  dof_handler.distribute_dofs(fe);
+  triangulation.refine_global(1);
+}
+
+
+
+template <int dim>
+void
+Poisson<dim>::setup_system()
+{
+  if (!fe)
+    {
+      fe = std::make_unique<FE_Q<dim>>(fe_degree);
+      forcing_term.initialize(dim == 1 ? "x" :
+                              dim == 2 ? "x,y" :
+                                         "x,y,z",
+                              forcing_term_expression,
+                              function_constants);
+      boundary_condition.initialize(dim == 1 ? "x" :
+                                    dim == 2 ? "x,y" :
+                                               "x,y,z",
+                                    boundary_contition_expression,
+                                    function_constants);
+      exact_solution.initialize(dim == 1 ? "x" :
+                                dim == 2 ? "x,y" :
+                                           "x,y,z",
+                                exact_solution_expression,
+                                function_constants);
+
+      stiffness_coefficient.initialize(dim == 1 ? "x" :
+                                       dim == 2 ? "x,y" :
+                                                  "x,y,z",
+                                       stiffness_coefficient_expression,
+                                       function_constants);
+    }
+
+
+  dof_handler.distribute_dofs(*fe);
   std::cout << "Number of degrees of freedom: " << dof_handler.n_dofs()
             << std::endl;
   DynamicSparsityPattern dsp(dof_handler.n_dofs());
@@ -54,15 +117,16 @@ Poisson::setup_system()
 }
 
 
-
+template <int dim>
 void
-Poisson::assemble_system()
+Poisson<dim>::assemble_system()
 {
-  QGauss<2>          quadrature_formula(fe.degree + 1);
-  FEValues<2>        fe_values(fe,
-                        quadrature_formula,
-                        update_values | update_gradients | update_JxW_values);
-  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
+  QGauss<dim>        quadrature_formula(fe->degree + 1);
+  FEValues<dim>      fe_values(*fe,
+                          quadrature_formula,
+                          update_values | update_gradients | update_JxW_values |
+                            update_quadrature_points);
+  const unsigned int dofs_per_cell = fe->n_dofs_per_cell();
   FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
   Vector<double>     cell_rhs(dofs_per_cell);
   std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
@@ -76,13 +140,16 @@ Poisson::assemble_system()
           for (const unsigned int i : fe_values.dof_indices())
             for (const unsigned int j : fe_values.dof_indices())
               cell_matrix(i, j) +=
-                (fe_values.shape_grad(i, q_index) * // grad phi_i(x_q)
+                (stiffness_coefficient.value(
+                   fe_values.quadrature_point(q_index)) *
+                 fe_values.shape_grad(i, q_index) * // grad phi_i(x_q)
                  fe_values.shape_grad(j, q_index) * // grad phi_j(x_q)
                  fe_values.JxW(q_index));           // dx
           for (const unsigned int i : fe_values.dof_indices())
             cell_rhs(i) += (fe_values.shape_value(i, q_index) * // phi_i(x_q)
-                            1. *                                // f(x_q)
-                            fe_values.JxW(q_index));            // dx
+                            forcing_term.value(
+                              fe_values.quadrature_point(q_index)) * // f(x_q)
+                            fe_values.JxW(q_index));                 // dx
         }
       cell->get_dof_indices(local_dof_indices);
       for (const unsigned int i : fe_values.dof_indices())
@@ -96,7 +163,7 @@ Poisson::assemble_system()
   std::map<types::global_dof_index, double> boundary_values;
   VectorTools::interpolate_boundary_values(dof_handler,
                                            0,
-                                           Functions::ZeroFunction<2>(),
+                                           boundary_condition,
                                            boundary_values);
   MatrixTools::apply_boundary_values(boundary_values,
                                      system_matrix,
@@ -105,9 +172,9 @@ Poisson::assemble_system()
 }
 
 
-
+template <int dim>
 void
-Poisson::solve()
+Poisson<dim>::solve()
 {
   SolverControl            solver_control(1000, 1e-12);
   SolverCG<Vector<double>> solver(solver_control);
@@ -115,26 +182,47 @@ Poisson::solve()
 }
 
 
-
+template <int dim>
 void
-Poisson::output_results() const
+Poisson<dim>::output_results(const unsigned int cycle) const
 {
-  DataOut<2> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(solution, "solution");
   data_out.build_patches();
-  std::ofstream output("solution.vtk");
-  data_out.write_vtk(output);
+  std::string   filename = output_name + "_" + std::to_string(cycle) + ".vtu";
+  std::ofstream output(filename);
+  data_out.write_vtu(output);
+}
+
+template <int dim>
+void
+Poisson<dim>::compute_error()
+{
+  error_table.error_from_exact(dof_handler, solution, exact_solution);
 }
 
 
-
+template <int dim>
 void
-Poisson::run()
+Poisson<dim>::run()
 {
   make_grid();
-  setup_system();
-  assemble_system();
-  solve();
-  output_results();
+  for (unsigned int cycle = 0; cycle < n_cycles; cycle++)
+    {
+      setup_system();
+      assemble_system();
+      solve();
+      compute_error();
+      output_results(cycle);
+      if (cycle < n_refinements - 1)
+        refine_grid();
+    }
+  error_table.output_table(std::cout);
 }
+
+
+
+template class Poisson<1>;
+template class Poisson<2>;
+template class Poisson<3>;
