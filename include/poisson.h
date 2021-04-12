@@ -25,6 +25,7 @@
 #include <deal.II/base/function.h>
 #include <deal.II/base/function_parser.h>
 #include <deal.II/base/parameter_acceptor.h>
+#include <deal.II/base/parsed_convergence_table.h>
 #include <deal.II/base/quadrature_lib.h>
 
 #include <deal.II/dofs/dof_handler.h>
@@ -66,6 +67,7 @@ public:
   void
   initialize(const std::string &filename);
 
+
 protected:
   void
   make_grid();
@@ -79,6 +81,8 @@ protected:
   solve();
   void
   output_results(const unsigned int cycle) const;
+  void
+  compute_error();
 
   Triangulation<dim>         triangulation;
   std::unique_ptr<FE_Q<dim>> fe;
@@ -88,13 +92,15 @@ protected:
   Vector<double>             solution;
   Vector<double>             system_rhs;
 
+  ParsedConvergenceTable error_table;
+
   FunctionParser<dim> forcing_term;
   FunctionParser<dim> boundary_condition;
   FunctionParser<dim> exact_solution;
 
   unsigned int fe_degree     = 1;
   unsigned int n_refinements = 4;
-  unsigned int n_cycles      = 1;
+  unsigned int n_cycles      = 4;
   std::string  output_name   = "poisson";
 
   std::string                   forcing_term_expression       = "1";

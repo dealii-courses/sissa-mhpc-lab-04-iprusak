@@ -37,6 +37,10 @@ Poisson<dim>::Poisson()
   add_parameter("Grid generator arguments", grid_generator_arguments);
   add_parameter("Number of refinement cycles", n_cycles);
   add_parameter("Exact solution expression", exact_solution_expression);
+
+  this->prm.enter_subsection("Error table");
+  error_table.add_parameters(this->prm);
+  this->prm.leave_subsection();
 }
 
 
@@ -181,6 +185,13 @@ Poisson<dim>::output_results(const unsigned int cycle) const
   data_out.write_vtu(output);
 }
 
+template <int dim>
+void
+Poisson<dim>::compute_error()
+{
+  error_table.error_from_exact(dof_handler, solution, exact_solution);
+}
+
 
 template <int dim>
 void
@@ -192,11 +203,14 @@ Poisson<dim>::run()
       setup_system();
       assemble_system();
       solve();
+      compute_error();
       output_results(cycle);
       if (cycle < n_refinements - 1)
         refine_grid();
     }
+  error_table.output_table(std::cout);
 }
+
 
 
 template class Poisson<1>;
